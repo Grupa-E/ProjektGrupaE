@@ -1,10 +1,12 @@
 ---
-title: "Untitled"
+title: "Projekt Grupa E"
 output: github_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+HR_20_1_ <- read_csv("https://raw.githubusercontent.com/Grupa-E/ProjektGrupaE/main/HR%20(1).csv?token=GHSAT0AAAAAACKM24E5CJLDP7FX464R62YQZLAQOOQ")
 ```
 
 ## GitHub Documents
