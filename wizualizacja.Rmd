@@ -1,0 +1,232 @@
+---
+title: "Projekt Grupa E"
+output: github_document
+author: "Weronika Nidzgorska, Julia Gaszyńska"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(naniar)
+library(readxl)
+library(dplyr)
+library(dlookr)
+library(validate)
+library(ggplot2)
+library(RColorBrewer)
+if (!require(stringr)) install.packages("stringr")
+library(stringr)
+HR <- read.csv("~/GitHub/Projekt-Analiza-Danych/GrupaE/HR.csv")
+HR <- read_csv("https://raw.githubusercontent.com/Grupa-E/ProjektGrupaE/main/HR%20(1).csv?token=GHSAT0AAAAAACKM24E5CJLDP7FX464R62YQZLAQOOQ")
+```
+
+### Raport projektu
+
+Celem naszego projektu jest przewidywanie odejść pracowników - co jest powodem,
+dla którego pracownicy decydują się na opuszczenie swojego miejsca pracy?
+Do powyższej analizy wykorzystamy bazę danych dotyczącą pracowników, zawierającą
+m.in. dane o ich wieku, miesięcznym dochodzie, zawodzie, stanie cywilnym, 
+satysfakcji z pracy itp. Przyjrzenie się tym danym i przeanalizowanie występujących
+zależności między nimi pomoże nam w odpowiedzi na postawione pytanie.
+
+## Czyszczenie danych
+
+Pracę nad projektem rozpoczynamy od czyszczenia danych.
+
+W pierwszej kolejności sprawdzamy czy w naszym zbiorze danych występują puste
+wartości.
+
+```{r}
+is.null(HR)
+miss_var_summary(HR)
+n_miss(HR)
+```
+W naszej bazie danych nie występują żadne puste wartości.
+
+## Wartości mniejsze od zera
+
+W następnym kroku sprawdzamy czy w naszych danych ilościowych są jakieś wartości
+ujemne (oczekujemy, że takich nie będzie, ponieważ, przykładowo, ujemny dystans 
+od domu do miejsca pracy byłby nielogiczny).
+```{r}
+rules <- validator(HR$DailyRate >= 0
+  , HR$DistanceFromHome >= 0
+  , HR$Education >= 0
+  , HR$EmployeeCount >= 0
+  , HR$EmployeeNumber >= 0
+  , HR$HourlyRate >0
+  , HR$JobInvolvement >= 0 
+  , HR$JobLevel >= 0
+  , HR$JobSatisfaction >= 0
+  , HR$MonthlyIncome >= 0
+  , HR$MonthlyRate >= 0
+  , HR$NumCompaniesWorked >= 0 
+  , HR$PercentSalaryHike >= 0
+  , HR$PerformanceRating >= 0
+  , HR$RelationshipSatisfaction >= 0
+  , HR$StandardHours >= 0
+  , HR$StockOptionLevel >= 0 
+  , HR$TotalWorkingYears >= 0
+  , HR$TrainingTimesLastYear >=0
+  , HR$WorkLifeBalance >= 0
+  , HR$YearsAtCompany >= 0
+  , HR$YearsInCurrentRole >= 0
+  , HR$YearsSinceLastPromotion >= 0
+  , HR$YearsWithCurrManager >= 0
+)
+
+cf <- confront(HR, rules)
+summary(cf)
+plot(cf)
+
+```
+Nie ma wartości mniejszych od zera, zatem nie musimy poprawiać ich wartości w tym zakresie.
+
+## Czyszczenie danych
+
+Następnie spojrzymy na dane pod względem wartości odstających.
+```{r}
+boxplot(HR$DailyRate)
+boxplot(HR$DistanceFromHome)
+boxplot(HR$Education)
+boxplot(HR$MonthlyIncome)
+```
+Jak możemy zauważyć, wartości odstające zaczynają się pojawiać w miesięcznych 
+dochodach pracowników.
+
+Aby pozbyć się obserwacji odstających, posłużymy się powszechną metodą wykorzystującą
+rozstęp międzykwartylowy (IQR). 
+Za wartość odstającą często uważa się dowolną wartość, która jest większa niż 
+1,5 * IQR powyżej trzeciego kwartyla lub poniżej pierwszego kwartyla.
+
+```{r}
+replace_outliers <- function(x) {
+  Q1 <- quantile(x, 0.25)
+  Q3 <- quantile(x, 0.75)
+  IQR <- Q3 - Q1
+  x[x < (Q1 - 1.5 * IQR) | x > (Q3 + 1.5 * IQR)] <- median(x, na.rm = TRUE)
+  return(x)
+}
+
+HR <- HR %>%
+  mutate_if(is.numeric, replace_outliers)
+head(HR)
+```
+
+Podsumowując pierwszy etap, posłużymy się wykresem, który upewni nas, że nie mamy 
+żadnych wartości brakujących.
+
+```{r}
+VIM::aggr(HR[3:7])
+```
+
+Możemy zatem przejść do kolejnego etapu projektu.
+
+## Wizualizacja danych
+
+
+``` {r}
+ggplot(HR, aes(y=Age,x=Attrition)) +
+  geom_boxplot() +
+  coord_flip()
+```
+
+Na powyższym wykresie możemy zauważyć, że z pracy częściej rezygnują młodsi pracownicy.
+
+
+``` {r}
+ggplot(HR, aes(x=MonthlyIncome,size=Attrition,y=Age,color=Gender)) +
+  geom_point()
+```
+
+Możemy zaobserwować, że na rezygnację z pracy częściej decydują się młodsze osoby
+z niższymi zarobkami.
+
+``` {r}
+HR %>%
+  filter(Attrition=="Yes") %>%
+  ggplot(aes(x = YearsAtCompany)) +
+  geom_histogram(
+    aes(fill = OverTime)
+    ,bins = 10
+    ,color = 'black'
+  ) +
+  labs(title = 'Staż pracy pracowników i nadgodziny')
+```
+
+
+Duża część pracowników decyduje się na odejście z pracy w początkowych latach 
+pracy,a wśród nich spora część pracowników pracuje ponad wymiar godzin.
+
+```{r}
+HR %>%
+  ggplot(aes(x = PercentSalaryHike)) +
+  geom_histogram(
+    aes(fill = Attrition)
+    ,bins = 50
+    ,color = 'black'
+  )
+```
+
+Osoby z niższą procentową podwyżką wynagrodzeń są bardziej skłonne do odejścia z pracy.
+
+```{r}
+ggplot(HR, aes(y=DailyRate,x=Attrition)) +
+  geom_boxplot() +
+  coord_flip()
+```
+Osoby z niższą dzienną stawką częściej rezygnują z pracy.
+
+```{r}
+ggplot(HR, aes(y=DistanceFromHome,x=Attrition)) +
+  geom_boxplot() +
+  coord_flip()
+```
+
+Jak możemy zauważyć, odległość między miejscem pracy a domem ma również znaczenie. Pracownicy, którzy muszą pokonać więcej kilometrów w drodze do pracy, częściej decydują się na odejście z pracy.
+
+```{r}
+HR %>%
+  ggplot(aes(x = JobLevel)) +
+  geom_histogram(
+    aes(fill = Attrition)
+    ,bins = 50
+    ,color = 'black'
+  )
+```
+Im niższy poziom pracy, tym pracownicy coraz częściej decydują się na rezygnację z pracy.
+
+```{r}
+HR %>%
+  ggplot(aes(x = BusinessTravel)) +
+  geom_bar(
+    aes(fill = Attrition),
+    color = 'black'
+  ) 
+```
+Pracownicy, którzy rzadko podróżują, najczęściej decydują się na odejście z pracy.
+
+```{r}
+HR %>%
+  ggplot(aes(x = EducationField)) +
+  geom_bar(
+    aes(fill = Attrition),
+    color = 'black'
+  ) 
+```
+
+Analizując dziedzinę edukacji pracowników, na rezygnację z pracy najczęściej decydują się pracownicy z dziedziny nauk przyrodniczych i medycznych.
+
+```{r}
+HR %>%
+  ggplot(aes(x = MaritalStatus)) +
+  geom_bar(
+    aes(fill = Attrition),
+    color = 'black'
+  ) 
+```
+
+Biorąc pod uwagę życie prywatne pracowników, osoby niebędące w związku małżeńskim częściej odchodzą z pracy.
+
+
+Podsumowując, na decyzję o odejściu z pracy wpływają różne czynniki. Na podstawie dokonanej analizy w niniejszym etapie, możemy powiedzieć, że najczęściej rezygnują młodsi pracownicy, zwłaszcza ci z niższymi zarobkami. Wysoka rotacja jest obserwowana w początkowych latach pracy, zwłaszcza wśród osób pracujących ponad normę godzinową. Niższa procentowa podwyżka wynagrodzeń i niższa dzienna stawka również sprzyjają odejściu z pracy. To pokazuje, że pracownicy nie czują się docenieni przez swoich przełożonych i nie widzą przyszłości w tej firmie. Długa droga do pracy, niższy szczebel zatrudnienia, rzadkie podróże służbowe, specjalizacja w dziedzinie nauk przyrodniczych i medycznych, a także brak związku małżeńskiego to determinanty sprzyjające rezygnacji z pracy.
