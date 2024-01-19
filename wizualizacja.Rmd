@@ -1,11 +1,12 @@
 ---
 title: "Projekt Grupa E"
 output: github_document
-author: "Weronika Nidzgorska, Julia Gaszyńska"
+author: "Weronika Nidzgorska"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+## wczytanie potrzebnych pakietów
 library(readr)
 library(naniar)
 library(readxl)
@@ -14,26 +15,54 @@ library(dlookr)
 library(validate)
 library(ggplot2)
 library(RColorBrewer)
-if (!require(stringr)) install.packages("stringr")
 library(stringr)
-HR <- read.csv("~/GitHub/Projekt-Analiza-Danych/GrupaE/HR.csv")
-HR <- read_csv("https://raw.githubusercontent.com/Grupa-E/ProjektGrupaE/main/HR%20(1).csv?token=GHSAT0AAAAAACKM24E5CJLDP7FX464R62YQZLAQOOQ")
+library(qwraps2)
+library(arsenal)
+library(e1071)
+library(haven)
+library(papeR)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(kableExtra)
+library(summarytools)
+library(classInt)
+library(pastecs)
+library(desctable)
+library(frequency)
+library(corrplot)
+library(ggpubr)
+library(ggstatsplot)
+library(rstantools)
+HR <- read_excel("HR.xlsx")
+
 ```
 
-### Raport projektu
 
-Celem naszego projektu jest przewidywanie odejść pracowników - co jest powodem,
-dla którego pracownicy decydują się na opuszczenie swojego miejsca pracy?
-Do powyższej analizy wykorzystamy bazę danych dotyczącą pracowników, zawierającą
-m.in. dane o ich wieku, miesięcznym dochodzie, zawodzie, stanie cywilnym, 
-satysfakcji z pracy itp. Przyjrzenie się tym danym i przeanalizowanie występujących
-zależności między nimi pomoże nam w odpowiedzi na postawione pytanie.
+
+### Raport projektu "Analityka HR"
+
+Celem niniejszego projektu jest zrozumienie i przewidywanie czynników wpływających na decyzję pracowników o odejściu z pracy. Odejście kwalifikowanych pracowników może być kosztowne dla organizacji, powodując straty zarówno wiedzy, jak i doświadczenia, a także pociągając za sobą konieczność ponoszenia dodatkowych kosztów związanych z rekrutacją i szkoleniem nowych osób. Przez dogłębne zbadanie różnorodnych danych, takich jak wiek pracowników, ich miesięczny dochód, zawód, stan cywilny, poziom satysfakcji z obowiązków zawodowych oraz innych istotnych informacji, można wyszukać wzorców i korelacji, które mogą przyczyniać się do rotacji pracowniczej. Przyjrzenie się tym danym i przeanalizowanie występujących zależności między nimi pomoże nam w odpowiedzi na postawione pytanie.
 
 ## Czyszczenie danych
 
-Pracę nad projektem rozpoczynamy od czyszczenia danych.
+Pracę nad projektem rozpoczynamy od przyjrzenia się naszemu zbiorowi danych.
 
-W pierwszej kolejności sprawdzamy czy w naszym zbiorze danych występują puste
+```{r}
+summary(HR)
+str(HR)
+```
+
+
+```{r}
+data_class <- data.frame(class = sapply(HR, class))
+data_class
+```
+
+Nie wszystkie zmienne w naszym zbiorze danych przydadzą się do niniejszej analizy.
+Usunięcie zbędnych kolumn nie jest jednak konieczne. W przyszłości możemy chcieć przeprowadzić bardziej złożone analizy, które wymagają wielowymiarowego podejścia. Zmienne, które obecnie wydają się zbędne, mogą okazać się kluczowe w dalszych analizach wieloczynnikowych.
+
+W pierwszej kolejności sprawdzamy czy w zbiorze danych występują puste
 wartości.
 
 ```{r}
@@ -41,6 +70,7 @@ is.null(HR)
 miss_var_summary(HR)
 n_miss(HR)
 ```
+
 W naszej bazie danych nie występują żadne puste wartości.
 
 ## Wartości mniejsze od zera
@@ -185,15 +215,16 @@ ggplot(HR, aes(y=DistanceFromHome,x=Attrition)) +
 
 Jak możemy zauważyć, odległość między miejscem pracy a domem ma również znaczenie. Pracownicy, którzy muszą pokonać więcej kilometrów w drodze do pracy, częściej decydują się na odejście z pracy.
 
+
 ```{r}
 HR %>%
   ggplot(aes(x = JobLevel)) +
-  geom_histogram(
-    aes(fill = Attrition)
-    ,bins = 50
-    ,color = 'black'
-  )
+  geom_bar(aes(fill = Attrition), bins = 50, color = 'black') +
+  scale_x_continuous(breaks = 1:5, labels = c("b.niski", "niski", "średni", "wysoki", "b.wysoki")) +
+  labs(x = "Stopień stanowiska", y = "Liczba pracowników", fill = "Attrition")
+
 ```
+
 Im niższy poziom pracy, tym pracownicy coraz częściej decydują się na rezygnację z pracy.
 
 ```{r}
@@ -229,4 +260,216 @@ HR %>%
 Biorąc pod uwagę życie prywatne pracowników, osoby niebędące w związku małżeńskim częściej odchodzą z pracy.
 
 
-Podsumowując, na decyzję o odejściu z pracy wpływają różne czynniki. Na podstawie dokonanej analizy w niniejszym etapie, możemy powiedzieć, że najczęściej rezygnują młodsi pracownicy, zwłaszcza ci z niższymi zarobkami. Wysoka rotacja jest obserwowana w początkowych latach pracy, zwłaszcza wśród osób pracujących ponad normę godzinową. Niższa procentowa podwyżka wynagrodzeń i niższa dzienna stawka również sprzyjają odejściu z pracy. To pokazuje, że pracownicy nie czują się docenieni przez swoich przełożonych i nie widzą przyszłości w tej firmie. Długa droga do pracy, niższy szczebel zatrudnienia, rzadkie podróże służbowe, specjalizacja w dziedzinie nauk przyrodniczych i medycznych, a także brak związku małżeńskiego to determinanty sprzyjające rezygnacji z pracy.
+Podsumowując, na decyzję o odejściu z pracy wpływają różne czynniki. Na podstawie dokonanej analizy w niniejszym etapie, możemy powiedzieć, że najczęściej rezygnują młodsi pracownicy, zwłaszcza ci z niższymi zarobkami. Wysoka rotacja jest obserwowana w początkowych latach pracy, zwłaszcza wśród osób pracujących ponad normę godzinową. Niższa procentowa podwyżka wynagrodzeń i niższa dzienna stawka również sprzyjają odejściu z pracy. To pokazuje, że pracownicy nie czują się docenieni przez swoich przełożonych i nie widzą przyszłości w tej firmie. Długa droga do pracy, niższy stopień stanowiska, rzadkie podróże służbowe, specjalizacja w dziedzinie nauk przyrodniczych i medycznych, a także brak związku małżeńskiego to determinanty sprzyjające rezygnacji z pracy.
+
+## Statystyki opisowe
+
+Przed rozpoczęciem tego etapu, należy w pierwszej kolejności dobrać właściwe formaty zmiennych.
+
+```{r}
+HR$Attrition<-as.factor(HR$Attrition)
+HR$JobLevel<-factor(HR$JobLevel)
+HR$JobInvolvement<-factor(HR$JobInvolvement)
+```
+
+Poniżej utworzono tabelę przedstawiającą statystyki opisowe miesięcznych dochodów pracowników w zależności od ich zaangażowania w pracę, które jest podzielone na cztery kategorie: "bardzo małe", "małe", "duże" i "bardzo duże".
+
+```{r}
+HR %>%
+  select(MonthlyIncome, JobInvolvement) %>%
+  mutate(JobInvolvement = factor(JobInvolvement, 
+                                 levels = c(1, 2, 3, 4),
+                                 labels = c("bardzo małe", "małe", "duże", "bardzo duże")),
+         Zaangażowanie_w_pracy = JobInvolvement) %>%
+  select(-JobInvolvement) %>%
+  group_by(Zaangażowanie_w_pracy) %>%
+  dplyr::summarize(Min=min(MonthlyIncome),
+                   Max=max(MonthlyIncome),
+                   średnia=mean(MonthlyIncome),
+                   odchylenie=sd(MonthlyIncome),
+                   mediana=median(MonthlyIncome),
+                   Q1=quantile(MonthlyIncome, 0.25),
+                   Q3=quantile(MonthlyIncome, 0.75),
+                   Skośność=skewness(MonthlyIncome),
+                   Kurtoza=kurtosis(MonthlyIncome)) %>%
+  kbl() %>%
+  kable_paper("striped", full_width = F) %>%
+  column_spec(1:2, bold = T) %>%
+  row_spec(c(1,3), bold = T, color = "white", background = "#C8A2C8") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), 
+                full_width = F, 
+                position = "center", 
+                fixed_thead = T) %>%
+  add_header_above(c(" " = 1, "Miesięczne dochody pracowników ze względu na zaangażowanie w pracy" = 9))
+```
+
+Na podstawie tej tabeli możemy zauważyć, że:
+
+* Kategoria z "bardzo małym" zaangażowaniem ma największy zakres dochodów (Min-Max), a także najwyższą wartość średnich dochodów.
+* Skośność w każdej kategorii jest dodatnia, co wskazuje na to, że rozkład dochodów jest prawostronnie skośny - większość pracowników zarabia mniej niż średnia, a mniejsza liczba pracowników zarabia znacznie więcej.
+* Kurtoza w każdej kategorii jest dodatnia, co sugeruje, że rozkład dochodów ma bardziej wyostrzony szczyt niż rozkład normalny, wskazując na większą koncentrację wartości wokół średniej.
+
+W ostatniej części tego etapu utworzono macierz korelacji między (prawie) wszystkimi zmiennymi.
+W celu jej wykonania zakodowano zmienne jakościowe na zmienne ilościowe, przypisując im
+etykiety liczbowe.
+
+```{r}
+qualitative_columns <- HR %>% select_if(is.character)
+qualitative_columns <- qualitative_columns %>% 
+  select(-Over18)
+```
+
+```{r}
+qualitative_columns <- qualitative_columns %>%
+  mutate(BusinessTravel = case_when(
+    BusinessTravel == "Non-Travel" ~ 0,
+    BusinessTravel == "Travel_Rarely" ~ 1,
+    BusinessTravel == "Travel_Frequently" ~ 2)
+  )
+```
+
+```{r}
+qualitative_columns <- qualitative_columns %>%
+  mutate(Department = case_when(
+      Department == "Human Resources" ~ 0,
+      Department == "Sales" ~ 1,
+      Department == "Research & Development" ~ 2)
+  )
+```
+
+```{r}
+qualitative_columns <- qualitative_columns %>%
+  mutate(EducationField = case_when(
+    EducationField == "Human Resources" ~ 0,
+    EducationField == "Marketing" ~ 1,
+    EducationField == "Life Sciences" ~ 2,
+    EducationField == "Technical Degree" ~ 3,
+    EducationField == "Medical" ~ 4,
+    EducationField == "Other" ~ 5)
+    )
+```
+
+```{r}
+qualitative_columns <- qualitative_columns %>%
+  mutate(Gender = case_when(
+    Gender == "Male" ~ 0,
+    Gender == "Female" ~ 1)
+  )
+```
+
+```{r}
+qualitative_columns <- qualitative_columns %>%
+  mutate(JobRole = case_when(
+    JobRole == "Human Resources" ~ 0,
+    JobRole == "Healthcare Representative" ~ 1,
+    JobRole == "Research Scientist" ~ 2,
+    JobRole == "Research Director" ~ 3,
+    JobRole == "Laboratory Technician" ~ 4,
+    JobRole == "Manager" ~ 5,
+    JobRole == "Manufacturing Director" ~ 6,
+    JobRole == "Sales Representative" ~ 7,
+    JobRole == "Sales Executive" ~ 8)
+  )
+```
+
+```{r}
+qualitative_columns <- qualitative_columns %>%
+  mutate(MaritalStatus = case_when(
+    MaritalStatus == "Single" ~ 0,
+    MaritalStatus == "Married" ~ 1,
+    MaritalStatus == "Divorced" ~ 2)
+  )
+```
+
+```{r}
+qualitative_columns <- qualitative_columns %>%
+  mutate(OverTime = case_when(
+    OverTime == "No" ~ 0,
+    OverTime == "Yes" ~ 1)
+  )
+```
+
+
+```{r}
+factor_columns <- HR %>% select_if(is.factor)
+```
+
+```{r}
+factor_columns <- factor_columns %>%
+  mutate(Attrition = case_when(
+    Attrition == "No" ~ 0,
+    Attrition == "Yes" ~ 1)
+  )
+```
+
+```{r}
+factor_columns$JobInvolvement <- as.numeric(factor_columns$JobInvolvement)
+factor_columns$JobLevel <- as.numeric(factor_columns$JobLevel)
+```
+
+```{r}
+numeric_data <- HR %>% select_if(is.numeric)
+```
+
+```{r}
+combined_data <- bind_cols(factor_columns, qualitative_columns, numeric_data)
+
+combined_data <- combined_data %>% 
+  select(-EmployeeCount) %>%
+  select(-StandardHours)
+```
+
+```{r}
+cor_matrix <- cor(combined_data, use="complete.obs")
+corrplot(cor_matrix, method="color", title="Macierz korelacji")
+```
+
+Z powyższej macierzy korelacji możemy odczytać, że występuje silny związek między
+miesięcznym dochodem i stopniem stanowiska oraz między łączną liczbą przepracowanych 
+lat a stopniem stanowiska.
+Możemy również zauważyć występującą zależność pomiędzy oceną wydajności pracownika a podwyżką wynagrodzeń za wyniki pracy.Performance Rating ~ Performance Salary Hike
+Całkiem mocne korelacje obserwujemy w prawym dolnym rogu macierzy, czyli m.in. między
+liczbą przepracowanych lat na obecnym stanowisku a liczbą przepracowanych lat w firmie, 
+czy też między liczbą lat od ostatniego awansu a liczbą przepracowanych lat w firmie.
+
+### Wnioskowanie statystyczne
+
+# Czy miesieczny dochod pracownika zalezy od tego jak czesto pracownik wyjezdza sluzbowo?
+W wyniku wcześniejszej wizualizacji, można było zauważyć, że najwięcej pracowników, którzy rzadko podróżują, najczęściej decydują się na odejście z pracy, w porównaniu do osób często podróżujących służbowo i niepodróżujących.Podróże służbowe mogą być postrzegane jako przywilej lub obciążenie, w zależności od kontekstu pracy i preferencji indywidualnych. Zrozumienie, jak podróże służbowe wpływają na dochód, może pomóc w ocenie, czy są one motywującym czynnikiem dla pracowników.
+W celu sprawdzenia założonej hipotezy, utworzono wykres zawierających szczegóły z testów statystycznych, przedstawiający analizę dochodów pracowników w zależności od ich częstotliwości podróży służbowych.
+
+```{r}
+ggbetweenstats(HR, BusinessTravel, MonthlyIncome)+ggtitle("Miesięczny dochód pracownika w zależności od częstotliwości wyjazdów służbowych")+labs(x="BusinessTravel", y="MonthlyIncome")
+```
+Na podstawie uzyskanego p-value odrzucamy założoną hipotezę. Obserwujemy brak statystycznie istotnych różnic w miesięcznym dochodzie ze względu na częstotliwość wyjazdów służbowych.
+
+# Czy procentowa podwyzka wynagrodzenia pracownika zalezy od odejścia z pracy (job level)?
+Wcześniej obserwowaliśmy również zależność, że osoby z niższą procentową podwyżką wynagrodzenia częściej odchodzą z pracy. Poznając zależność między poziomem stanowiska a podwyżkami wynagrodzenia, firma może lepiej zrozumieć, jakie czynniki wpływają na decyzje pracowników o pozostaniu w firmie lub odejściu. To z kolei może pomóc w opracowaniu strategii zatrzymywania kluczowych talentów. Aby sprawdzić założoną hipotezę, tworzymy poniższy wykres przedstawiający analizę statystyczną związków między odejściem z pracy a procentową podwyżką wynagrodzenia. 
+
+```{r}
+ggbetweenstats(HR, Attrition, PercentSalaryHike)+ggtitle("Procentowa podwyżka wynagrodzeń a odejście z pracy")+labs(x="Attrition", y="PercentSalaryHike")
+```
+Wyniki testu wskazują, że nie ma statystycznie istotnej różnicy w procentowych podwyżkach wynagrodzenia między pracownikami, którzy odeszli, a tymi, którzy pozostali w pracy.
+
+
+# Czy odejście z pracy zależy od wykonywanego zawodu w firmie?
+Z uwagi na sporą ilość wariantów zmiennej JobRole, we wcześniejszym etapie nie analizowano zawodów firmy. Jest to dobry moment, aby sprawdzić, czy wykonywanie danego zawodu w firmie wpływa na decyzję o odejściu z pracy. Poznanie wzorców rotacji w kontekście różnych zawodów może pomóc firmie zidentyfikować specyficzne role lub działania, które mają wysoki wskaźnik odejść. To z kolei może skłonić do bliższego przyjrzenia się warunkom pracy lub satysfakcji pracowniczej w tych obszarach.
+
+```{r}
+ggbarstats(HR, Attrition, JobRole)+ggtitle("Odejście z pracy w zależności od wykonywanego zawodu")+labs(x="Attrition", y="JobRole", fill="Odejście z pracy")
+```
+Wykres ilustruje, że istnieje różnica w odsetku odejść z pracy między różnymi zawodami w firmie. Przyjmując poziom istotności na poziomie 0.10, obserwujemy, że Przedstawiciele handlowi (ang. Sales Representative) najczęściej decydują się na rezygnację z pracy, a najmniej osób na stanowisku Dyrektora badań odchodzi z firmy. 
+
+
+# Czy odejście z pracy zależy wynagrodzenia?
+W poprzednim etapie wizualizacji można było zauważyć, że na rezygnację z pracy częściej decydują się młodsze osoby
+z niższymi zarobkami. Wynagrodzenie jest podstawowym motywatorem dla wielu pracowników. Zrozumienie, jak poziom wynagrodzenia wpływa na decyzje pracowników o pozostaniu w firmie lub odejściu, może dostarczyć cennych informacji do tworzenia polityk wynagradzania.
+
+```{r}
+ggbetweenstats(HR, Attrition, MonthlyIncome)+ggtitle("Miesięczne wynagrodzenie pracowników a odejście z pracy")+labs(x="Attrition", y="MonthlyIncome")
+```
+Rozkłady wynagrodzeń pracowników, którzy odeszli, są węższe i skoncentrowane wokół niższych dochodów w porównaniu do tych, którzy pozostali w pracy. Wyniki testów pokazują, że wynagrodzenie ma istotny wpływ na decyzję o odejściu z pracy.
+
+```{r}
+ggpiestats(HR, Attrition, MonthlyIncome)+ggtitle("Miesięczne wynagrodzenie pracowników a odejście z pracy")
+```
